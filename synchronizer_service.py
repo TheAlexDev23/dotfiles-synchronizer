@@ -12,10 +12,10 @@ from datetime import datetime
 # Polling rate for file changes in seconds
 RATE = 30
 
-# Your user here
-USER = ""
-
-HOME = "/home/" + USER
+HOME = os.environ.get("HOME")
+if HOME is None:
+    print("HOME environment variable is nonexistent")
+    exit(1)
 
 dir_hashes = {}
 file_hashes = {}
@@ -78,8 +78,6 @@ def check_for_files(data):
 
 
 def expand_path(path: str) -> str:
-    path = path.replace("~", "~" + USER)
-
     return os.path.expanduser(path)
 
 
