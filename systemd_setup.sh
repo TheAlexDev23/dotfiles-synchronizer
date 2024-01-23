@@ -25,3 +25,5 @@ if [ "$answer" == "y" ]; then
 elif [ "$answer" != "n" ]; then
 	echo "Invalid input. Please enter 'y' or 'n'."
 fi
+
+rm ./dotfiles_synchronizer.service ./systemd_setup.sh
