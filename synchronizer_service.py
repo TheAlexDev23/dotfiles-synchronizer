@@ -12,7 +12,8 @@ from datetime import datetime
 # Polling rate for file changes in seconds
 RATE = 30
 
-HOME = os.environ.get("HOME")
+# Important to write as /home/user not /home/user/
+HOME = PUT_YOUR_HOME_FOLDER_HERE
 if HOME is None:
     print("HOME environment variable is nonexistent")
     exit(1)
