@@ -55,7 +55,7 @@ def check_for_changes():
 
 def check_for_directories(data):
     for dir in data["directories"]:
-        expand_path(dir)
+        dir = expand_path(dir)
 
         dir_hash = hash_directory(dir)
 

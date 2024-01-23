@@ -1,11 +1,6 @@
 {
   "directories": [
-    "~/.config/polybar/",
-    "~/.config/i3/",
-    "~/.config/kitty/",
-    "~/.config/nvim/"
   ],
   "files": [
-    "~/.config/picom.conf"
   ]
 }

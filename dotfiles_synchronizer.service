@@ -3,9 +3,9 @@ Description=Automatical dotfiles git synchronizer
 After=network.target
 
 [Service]
-Environment="HOME=/home/alex"
-ExecStart=/home/alex/dotfiles/synchronizer_service.py
-WorkingDirectory=/home/alex/dotfiles
+Environment="HOME=user_home"
+ExecStart=script_path
+WorkingDirectory=script_directory
 Restart=always
 
 [Install]
