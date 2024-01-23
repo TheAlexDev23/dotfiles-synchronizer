@@ -8,7 +8,7 @@ Automatically synchronize any of your configurations to git.
 2. Clone the forked repo (preferably with ssh, as this program will also automatically push and you won't be able to input password/passkey)
 3. Edit targets.json and add any directories/files that you want to synchronize
 4. Edit the USER variable in synchronizer_service.py to your local user
-5. Run systemd_setup.sh (if you have systemd) NOTE: it requires sudo abilities for your user
+5. Run systemd_setup.sh (if you have systemd) 
 6. Profit
 
 ## Other configuration
