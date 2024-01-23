@@ -12,11 +12,10 @@ from datetime import datetime
 # Polling rate for file changes in seconds
 RATE = 30
 
-# Important to write as /home/user not /home/user/
-HOME = PUT_YOUR_HOME_FOLDER_HERE
-if HOME is None:
-    print("HOME environment variable is nonexistent")
-    exit(1)
+# Your user here
+USER = ""
+
+HOME = "/home/" + USER
 
 dir_hashes = {}
 file_hashes = {}
@@ -56,8 +55,7 @@ def check_for_changes():
 
 def check_for_directories(data):
     for dir in data["directories"]:
-        # Python struggles to open directories with ~ for some reason
-        dir = os.path.expanduser(dir)
+        expand_path(dir)
 
         dir_hash = hash_directory(dir)
 
@@ -69,7 +67,7 @@ def check_for_directories(data):
 
 def check_for_files(data):
     for file_path in data["files"]:
-        file_path = os.path.expanduser(file_path)
+        file_path = expand_path(file_path)
 
         file_hash = hash_file(file_path)
 
@@ -77,6 +75,12 @@ def check_for_files(data):
             backup_file(file_path)
 
         file_hashes[file_path] = file_hash
+
+
+def expand_path(path: str) -> str:
+    path = path.replace("~", "~" + USER)
+
+    return os.path.expanduser(path)
 
 
 def hash_directory(directory_path: str) -> str:
