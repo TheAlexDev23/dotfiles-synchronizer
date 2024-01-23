@@ -17,3 +17,7 @@ synchronizer_service.py:
 # Polling rate for changes in seconds
 RATE = 30
 ```
+
+
+## What if I don't have systemd?
+I don't really have experience with systemd alternatives, but feel free to open a pr.
