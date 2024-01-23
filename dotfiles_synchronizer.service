@@ -1,0 +1,12 @@
+[Unit]
+Description=Automatical dotfiles git synchronizer
+After=network.target
+
+[Service]
+ExecStart=/home/alex/dotfiles-synchronizer/synchronizer_service.py
+WorkingDirectory=/home/alex/dotfiles-synchronizer
+Restart=always
+
+[Install]
+WantedBy=default.target
+

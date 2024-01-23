@@ -9,9 +9,12 @@ import time
 
 from datetime import datetime
 
+# Polling rate for file changes in seconds
+RATE = 30
+
 HOME = os.environ.get("HOME")
 if HOME is None:
-    print("HOME environment variable is non existant")
+    print("HOME environment variable is nonexistent")
     exit(1)
 
 dir_hashes = {}
@@ -47,7 +50,7 @@ def check_for_changes():
 
         check_for_files(data)
 
-        time.sleep(3)
+        time.sleep(RATE)
 
 
 def check_for_directories(data):
