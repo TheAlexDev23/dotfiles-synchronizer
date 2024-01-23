@@ -6,13 +6,8 @@ script_directory=$(pwd)
 escaped_script_path=$(echo "$script_path" | sed 's/[\/&]/\\&/g')
 escaped_script_directory=$(echo "$script_directory" | sed 's/[\/&]/\\&/g')
 
-echo $escaped_script_path
-echo $escaped_script_directory
-
 sed -i "s/script_path/$escaped_script_path/g" ./dotfiles_synchronizer.service
 sed -i "s/script_directory/$escaped_script_directory/g" ./dotfiles_synchronizer.service
-
-cat ./dotfiles_synchronizer.service
 
 sudo cp ./dotfiles_synchronizer.service /etc/systemd/system/
 sudo systemctl daemon-reload
