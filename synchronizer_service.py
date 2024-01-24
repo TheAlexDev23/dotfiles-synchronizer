@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import sys
 import os
 import subprocess
 import atexit
@@ -19,6 +20,10 @@ if HOME is None:
 
 dir_hashes = {}
 file_hashes = {}
+
+
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 
 def load_hashes():
@@ -43,8 +48,13 @@ def save_hashes():
 
 def check_for_changes():
     while True:
-        with open(HOME + "/.config/synchronization_targets.json", "r") as fp:
-            data = json.load(fp)
+        try:
+            with open(HOME + "/.config/synchronization_targets.json", "r") as fp:
+                data = json.load(fp)
+        except:
+            eprint("Could not read configuration file")
+            time.sleep(RATE)
+            continue
 
         check_for_directories(data)
 
