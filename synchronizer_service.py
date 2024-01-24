@@ -42,10 +42,10 @@ def save_hashes():
 
 
 def check_for_changes():
-    with open("targets.json", "r") as fp:
-        data = json.load(fp)
-
     while True:
+        with open(HOME + "/.config/synchronization_targets.json", "r") as fp:
+            data = json.load(fp)
+
         check_for_directories(data)
 
         check_for_files(data)

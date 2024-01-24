@@ -1,14 +1,32 @@
 <h1 align="center">Dotfiles Synchronizer</h1>
 
-Automatically synchronize any of your configurations to git.
+Automatically synchronize any of your configurations to git. 
 
 ## Installation
 
 1. **Fork** this repository
 2. Clone the forked repo (preferably with ssh, as this program will also automatically push and you won't be able to input password/passkey)
-3. Edit targets.json and add any directories/files that you want to synchronize
-4. Run systemd_setup.sh (if you have systemd) 
-5. Profit
+3. Run systemd_setup.sh (if you have systemd) 
+4. Profit
+
+You can configure the directories or inidividual files that you want to synchronize by modifying `~/.config/synchronization_targets.json`
+
+The syntax is quite simple:
+
+```json
+{
+    "directories": [
+        "~/path/to/your/dir1",
+        "~/path/to/your/dir2",
+        "~/path/to/your/dir3"
+    ],
+    "files": [
+        "~/path/to/your/file.1",
+        "~/path/to/your/file.2",
+        "~/path/to/your/file.3"
+    ]
+}
+```
 
 ## Other configuration
 
