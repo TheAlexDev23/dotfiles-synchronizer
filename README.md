@@ -1,6 +1,6 @@
 <h1 align="center">Dotfiles Synchronizer</h1>
 
-Automatically synchronize any of your configurations to git. 
+Automatically synchronize any of your configurations to git. A working example can be seen [here](https://github.com/TheAlexDev23/dotfiles)
 
 ## Installation
 
