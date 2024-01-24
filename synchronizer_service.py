@@ -3,118 +3,110 @@
 import sys
 import os
 import subprocess
-import atexit
-import hashlib
 import json
 import time
 
 from datetime import datetime
 
+from inotify_simple import INotify, flags
+
 # Polling rate for file changes in seconds
-RATE = 30
+RATE = 1
 
 HOME = os.environ.get("HOME")
 if HOME is None:
     print("HOME environment variable is nonexistent")
     exit(1)
 
-dir_hashes = {}
-file_hashes = {}
+CONFIG = HOME + "/.config/synchronization_targets.json"
+
+VERBOSE_LOGGING = False
 
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def load_hashes():
-    if not os.path.exists(os.path.abspath("./save.json")):
-        return
-
-    with open("save.json", "r") as fp:
-        data = json.load(fp)
-
-    global dir_hashes, file_hashes
-
-    dir_hashes = data["directories"]
-    file_hashes = data["files"]
-
-
-def save_hashes():
-    saved_hashes = {"directories": dir_hashes, "files": file_hashes}
-
-    with open("save.json", "w") as fp:
-        json.dump(saved_hashes, fp)
+full_paths = {}
 
 
 def check_for_changes():
+    global dotfiles_notify
+
+    parse_config()
+
+    os.mkdir(HOME + "/.config/polybar/haha")
+
     while True:
-        try:
-            with open(HOME + "/.config/synchronization_targets.json", "r") as fp:
-                data = json.load(fp)
-        except:
-            eprint("Could not read configuration file")
-            time.sleep(RATE)
-            continue
+        for change in dotfiles_notify.read():
+            if not VERBOSE_LOGGING:
+                continue
+            print(change + " " + get_full_path(change.wd))
+            for flag in flags.from_mask(change.mask):
+                print(next((flag.name for _flag in flags if _flag.value == flag), None))
 
-        check_for_directories(data)
-
-        check_for_files(data)
+        # git_commit()
 
         time.sleep(RATE)
 
 
-def check_for_directories(data):
-    for dir in data["directories"]:
-        dir = expand_path(dir)
+def parse_config():
+    try:
+        with open(CONFIG, "r") as fp:
+            data = json.load(fp)
 
-        dir_hash = hash_directory(dir)
+        global dotfiles_notify
+    except:
+        eprint("Could not load config. Exiting...")
+        exit(1)
 
-        if dir not in dir_hashes or dir_hashes[dir] != dir_hash:
-            backup_directory(dir)
-
-        dir_hashes[dir] = dir_hash
-
-
-def check_for_files(data):
-    for file_path in data["files"]:
-        file_path = expand_path(file_path)
-
-        file_hash = hash_file(file_path)
-
-        if file_path not in file_hashes or file_hashes[file_path] != file_hash:
-            backup_file(file_path)
-
-        file_hashes[file_path] = file_hash
+    dotfiles_notify = get_inotify(data)
 
 
-def expand_path(path: str) -> str:
-    return os.path.expanduser(path)
+def get_inotify(data) -> INotify:
+    inotify = INotify()
+    watch_flags = (
+        flags.CREATE
+        | flags.DELETE
+        | flags.MODIFY
+        | flags.DELETE_SELF
+        | flags.MOVED_FROM
+        | flags.MOVED_TO
+    )
+
+    for path in data["directories"]:
+        path = os.path.expanduser(path)
+        print(f"Watching {path}")
+        wd = inotify.add_watch(path, watch_flags)
+        add_to_full_paths(path, wd)
+
+        for root, dirs, _ in os.walk(path):
+            for directory in dirs:
+                path = os.path.join(root, directory)
+                print(f"Watching {path}")
+                wd = inotify.add_watch(path, watch_flags)
+                add_to_full_paths(path, wd)
+
+    for path in data["files"]:
+        path = os.path.expanduser(path)
+        print(f"Watching {path}")
+        inotify.add_watch(path, watch_flags)
+
+    return inotify
 
 
-def hash_directory(directory_path: str) -> str:
-    hasher = hashlib.sha256()
-    for root, dirs, files in os.walk(directory_path):
-        dirs.sort()
-        files.sort()
-        for dir_name in dirs:
-            dir_path = os.path.join(root, dir_name)
-            hasher.update(hash_directory(dir_path).encode("utf-8"))
-        for file_name in files:
-            file_path = os.path.join(root, file_name)
-            with open(file_path, "rb") as file:
-                for chunk in iter(lambda: file.read(4096), b""):
-                    hasher.update(chunk)
+def add_to_full_paths(path: str, wd):
+    if path not in full_paths:
+        full_paths[path] = []
 
-    return hasher.hexdigest()
+    full_paths[path].append(wd)
 
 
-def hash_file(file_path: str) -> str:
-    hasher = hashlib.sha256()
-    with open(file_path, "rb") as file:
-        for chunk in iter(lambda: file.read(4096), b""):
-            hasher.update(chunk)
-
-    return hasher.hexdigest()
+def get_full_path(wd) -> str | None:
+    for key, value in full_paths.items():
+        if wd in value:
+            return key
+    return None
 
 
 def backup_directory(dir: str) -> None:
@@ -146,8 +138,5 @@ def git_commit():
     subprocess.run(["git", "commit", "-m", f"Automated update {current_datetime}"])
     subprocess.run(["git", "push", "origin", "main"])
 
-
-load_hashes()
-atexit.register(save_hashes)
 
 check_for_changes()
