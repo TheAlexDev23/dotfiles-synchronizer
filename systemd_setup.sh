@@ -14,7 +14,7 @@ sed -i "s/user_home/$escaped_user_home/g" ./setup/dotfiles_synchronizer.service
 sed -i "s/script_path/$escaped_script_path/g" ./setup/dotfiles_synchronizer.service
 sed -i "s/script_directory/$escaped_script_directory/g" ./setup/dotfiles_synchronizer.service
 
-cp targets.json $HOME/.config/synchronization_targets.json
+cp ./setup/targets.json $HOME/.config/synchronization_targets.json
 
 cp ./setup/dotfiles_synchronizer.service $HOME/.config/systemd/user
 systemctl --user daemon-reload
