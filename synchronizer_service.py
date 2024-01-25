@@ -25,8 +25,14 @@ VERBOSE_LOGGING = False
 # Mainly used in development. If False, won't commit
 COMMIT = True
 
+# Time since last commit to push
+PUSH_RATE = 30
+
 config_notify: INotify
 dotfiles_notify: INotify
+
+awaiting_push = False
+time_since_awaiting_push: float = 0
 
 
 def eprint(*args, **kwargs):
@@ -68,6 +74,9 @@ def check_for_changes():
     while True:
         check_config_changes()
         check_tracked_files()
+
+        if awaiting_push and time.time() - time_since_awaiting_push >= PUSH_RATE:
+            git_push()
 
         time.sleep(RATE)
 
@@ -223,19 +232,30 @@ def backup_file(path: str) -> None:
 
 
 def git_commit(commit_message: str | None = None):
-    if not COMMIT:
-        return
+    global awaiting_push, time_since_awaiting_push
+
+    awaiting_push = True
+    time_since_awaiting_push = time.time()
 
     if commit_message is None:
         commit_message = str(datetime.now())
 
+    if not COMMIT:
+        print(f"Commit with message {commit_message}")
+        return
+
     subprocess.run(["git", "add", "."])
     subprocess.run(["git", "commit", "-m", f"Automated update: {commit_message}"])
 
-    git_push()
-
 
 def git_push():
+    global awaiting_push
+    awaiting_push = False
+
+    if not COMMIT:
+        print("Git push")
+        return
+
     subprocess.run(["git", "push"])
 
 
