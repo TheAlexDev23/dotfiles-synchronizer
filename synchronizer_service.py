@@ -3,151 +3,245 @@
 import sys
 import os
 import subprocess
-import atexit
-import hashlib
 import json
 import time
 
 from datetime import datetime
 
+from inotify_simple import INotify, flags
+
 # Polling rate for file changes in seconds
-RATE = 30
+RATE = 0.5
 
 HOME = os.environ.get("HOME")
 if HOME is None:
     print("HOME environment variable is nonexistent")
     exit(1)
 
-dir_hashes = {}
-file_hashes = {}
+CONFIG = HOME + "/.config/synchronization_targets.json"
+
+VERBOSE_LOGGING = False
+
+# Mainly used in development. If False, won't commit
+COMMIT = True
+
+config_notify: INotify
+dotfiles_notify: INotify
 
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def load_hashes():
-    if not os.path.exists(os.path.abspath("./save.json")):
-        return
+base_paths = {}
+all_tracked_paths = {}
 
-    with open("save.json", "r") as fp:
+
+def track_config():
+    global config_notify
+    config_notify = INotify()
+    watch_flags = flags.CREATE | flags.DELETE | flags.MODIFY | flags.DELETE_SELF
+
+    config_notify.add_watch(CONFIG, watch_flags)
+
+
+def backup_initial_files():
+    print("Performing initial backup")
+
+    with open(CONFIG, "r") as fp:
         data = json.load(fp)
 
-    global dir_hashes, file_hashes
+    for dir in data["directories"]:
+        dir = os.path.expanduser(dir)
+        backup_directory(dir)
 
-    dir_hashes = data["directories"]
-    file_hashes = data["files"]
+    for path in data["files"]:
+        path = os.path.expanduser(path)
+        backup_file(path)
 
-
-def save_hashes():
-    saved_hashes = {"directories": dir_hashes, "files": file_hashes}
-
-    with open("save.json", "w") as fp:
-        json.dump(saved_hashes, fp)
+    git_commit("initial backup")
 
 
 def check_for_changes():
+    global dotfiles_notify, config_notify
+
     while True:
-        try:
-            with open(HOME + "/.config/synchronization_targets.json", "r") as fp:
-                data = json.load(fp)
-        except:
-            eprint("Could not read configuration file")
-            time.sleep(RATE)
-            continue
-
-        check_for_directories(data)
-
-        check_for_files(data)
+        check_config_changes()
+        check_tracked_files()
 
         time.sleep(RATE)
 
 
-def check_for_directories(data):
-    for dir in data["directories"]:
-        dir = expand_path(dir)
+def parse_config(exit_on_failure=True):
+    try:
+        with open(CONFIG, "r") as fp:
+            data = json.load(fp)
+    except:
+        eprint("Could not load config. ")
+        if exit_on_failure:
+            exit(1)
+        else:
+            # Gotta exit and keep previous dotfiles_notify because we wont be able to parse data
+            return
 
-        dir_hash = hash_directory(dir)
-
-        if dir not in dir_hashes or dir_hashes[dir] != dir_hash:
-            backup_directory(dir)
-
-        dir_hashes[dir] = dir_hash
-
-
-def check_for_files(data):
-    for file_path in data["files"]:
-        file_path = expand_path(file_path)
-
-        file_hash = hash_file(file_path)
-
-        if file_path not in file_hashes or file_hashes[file_path] != file_hash:
-            backup_file(file_path)
-
-        file_hashes[file_path] = file_hash
+    track_dotfiles(data)
 
 
-def expand_path(path: str) -> str:
-    return os.path.expanduser(path)
+def track_dotfiles(data) -> None:
+    global dotfiles_notify
+    dotfiles_notify = INotify()
+
+    for path in data["directories"]:
+        path = os.path.expanduser(path)
+        base_path = path
+        print(f"Watching {path}")
+        add_watch(path, base_path)
+
+        for root, dirs, _ in os.walk(path):
+            for directory in dirs:
+                path = os.path.join(root, directory)
+                print(f"Watching {path}")
+                add_watch(path, base_path)
+
+    for path in data["files"]:
+        path = os.path.expanduser(path)
+        print(f"Watching {path}")
+        add_watch(path, path)
 
 
-def hash_directory(directory_path: str) -> str:
-    hasher = hashlib.sha256()
-    for root, dirs, files in os.walk(directory_path):
-        dirs.sort()
-        files.sort()
-        for dir_name in dirs:
-            dir_path = os.path.join(root, dir_name)
-            hasher.update(hash_directory(dir_path).encode("utf-8"))
-        for file_name in files:
-            file_path = os.path.join(root, file_name)
-            with open(file_path, "rb") as file:
-                for chunk in iter(lambda: file.read(4096), b""):
-                    hasher.update(chunk)
+def add_watch(path: str, base_path: str) -> None:
+    watch_flags = (
+        flags.CREATE
+        | flags.DELETE
+        | flags.MODIFY
+        | flags.DELETE_SELF
+        | flags.MOVED_FROM
+        | flags.MOVED_TO
+    )
 
-    return hasher.hexdigest()
+    global dotfiles_notify
+    wd = dotfiles_notify.add_watch(path, watch_flags)
+    add_to_base_paths(base_path, wd)
+    all_tracked_paths[wd] = path
 
 
-def hash_file(file_path: str) -> str:
-    hasher = hashlib.sha256()
-    with open(file_path, "rb") as file:
-        for chunk in iter(lambda: file.read(4096), b""):
-            hasher.update(chunk)
+def add_to_base_paths(path: str, wd):
+    if path not in base_paths:
+        base_paths[path] = []
 
-    return hasher.hexdigest()
+    base_paths[path].append(wd)
+
+
+def check_config_changes():
+    global config_notify
+
+    changes = config_notify.read(0, 1)
+
+    if len(changes) == 0:
+        return
+
+    for change in changes:
+        for flag in flags.from_mask(change.mask):
+            if flag is flags.IGNORED:
+                track_config()
+
+    parse_config(False)
+
+
+def check_tracked_files():
+    global dotfiles_notify
+
+    changes = dotfiles_notify.read(0, 1)
+
+    if len(changes) == 0:
+        return
+
+    changed_dirs = set()
+    for change in changes:
+        base_path = get_base_path(change.wd)
+        print(f"Detected changes in {base_path}")
+        changed_dirs.add(base_path)
+
+        if VERBOSE_LOGGING:
+            print(f"Change {change}")
+            log_change_flags(change)
+
+        retrack_file_if_necessary(change, base_path)
+
+    for change in changed_dirs:
+        if os.path.isdir(change):
+            backup_directory(change)
+        else:
+            backup_file(change)
+
+    commit_message = "Changes to "
+    for change in changed_dirs:
+        commit_message += os.path.basename(change) + " "
+
+    git_commit(commit_message)
+
+
+def get_base_path(wd) -> str:
+    for key, value in base_paths.items():
+        if wd in value:
+            return key
+
+    raise ValueError("Invalid argument")
+
+
+def log_change_flags(change):
+    for flag in flags.from_mask(change.mask):
+        print(next((flag.name for _flag in flags if _flag.value == flag), None))
+
+
+def retrack_file_if_necessary(change, base_path):
+    for flag in flags.from_mask(change.mask):
+        if flag is not flags.IGNORED:
+            continue
+
+        path = all_tracked_paths[change.wd]
+
+        add_watch(path, base_path)
 
 
 def backup_directory(dir: str) -> None:
-    print(f"Change in directory {dir}")
+    print(f"Backing up directory {dir}")
 
     backup_dir = dir.replace(HOME, "./home")
 
     subprocess.run(["mkdir", "-p", backup_dir])
     subprocess.run(["cp", "-r", dir, backup_dir + "/.."])
 
-    git_commit()
-
 
 def backup_file(path: str) -> None:
-    print(f"Change in file {path}")
+    print(f"Backing up file {path}")
 
     backup_dir = os.path.dirname(path.replace(HOME, "./home"))
 
     subprocess.run(["mkdir", "-p", backup_dir])
     subprocess.run(["cp", path, backup_dir])
 
-    git_commit()
 
+def git_commit(commit_message: str | None = None):
+    if not COMMIT:
+        return
 
-def git_commit():
-    current_datetime = datetime.now()
+    if commit_message is None:
+        commit_message = str(datetime.now())
 
     subprocess.run(["git", "add", "."])
-    subprocess.run(["git", "commit", "-m", f"Automated update {current_datetime}"])
-    subprocess.run(["git", "push", "origin", "main"])
+    subprocess.run(["git", "commit", "-m", f"Automated update: {commit_message}"])
+
+    git_push()
 
 
-load_hashes()
-atexit.register(save_hashes)
+def git_push():
+    subprocess.run(["git", "push"])
 
-check_for_changes()
+
+if __name__ == "__main__":
+    parse_config()
+    track_config()
+
+    backup_initial_files()
+    check_for_changes()
