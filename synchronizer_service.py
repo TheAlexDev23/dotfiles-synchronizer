@@ -5,13 +5,26 @@ import os
 import subprocess
 import json
 import time
-
 from datetime import datetime
 
 from inotify_simple import INotify, flags
 
-# Polling rate for file changes in seconds
+import commit_message_generation
+
+
+# Polling rate for file changes in seconds. Isn't as important, just make sure that it's not 0 if you use editors like neovim.
 RATE = 0.5
+
+VERBOSE_LOGGING = False
+
+# Mainly used in development. If False, will not commit/push just log.
+COMMIT = True
+
+# Time since last commit in order to push. Used to prevent rate limits.
+PUSH_RATE = 30
+
+# Experimental. Use GPT for commit messages. Requires OPENAI_KEY environment variable
+USE_OPENAI = False
 
 HOME = os.environ.get("HOME")
 if HOME is None:
@@ -19,14 +32,6 @@ if HOME is None:
     exit(1)
 
 CONFIG = HOME + "/.config/synchronization_targets.json"
-
-VERBOSE_LOGGING = False
-
-# Mainly used in development. If False, won't commit
-COMMIT = True
-
-# Time since last commit to push
-PUSH_RATE = 30
 
 config_notify: INotify
 dotfiles_notify: INotify
@@ -245,6 +250,10 @@ def git_commit(commit_message: str | None = None):
         return
 
     subprocess.run(["git", "add", "."])
+
+    if USE_OPENAI:
+        commit_message = commit_message_generation.get_commit_message()
+
     subprocess.run(["git", "commit", "-m", f"Automated update: {commit_message}"])
 
 

@@ -32,8 +32,19 @@ The syntax is quite simple:
 
 synchronizer_service.py:
 ```python
-# Polling rate for changes in seconds
-RATE = 30
+# Polling rate for file changes in seconds. Isn't as important, just make sure that it's not 0 if you use editors like neovim.
+RATE = 0.5
+
+VERBOSE_LOGGING = False
+
+# Mainly used in development. If False, will not commit/push just log.
+COMMIT = True
+
+# Time since last commit in order to push. Used to prevent rate limits.
+PUSH_RATE = 30
+
+# Experimental. Use GPT for commit messages. Requires OPENAI_KEY environment variable
+USE_OPENAI = False
 ```
 
 
