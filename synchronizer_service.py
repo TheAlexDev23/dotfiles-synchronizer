@@ -17,8 +17,8 @@ RATE = 0.5
 
 VERBOSE_LOGGING = False
 
-# Mainly used in development. If False, will not commit/push just log.
-COMMIT = True
+# Used in development, if True will just print the supposed commands without executing them
+NO_BACKUP = False
 
 # Time since last commit in order to push. Used to prevent rate limits.
 PUSH_RATE = 30
@@ -105,6 +105,11 @@ def track_dotfiles(data) -> None:
     global dotfiles_notify
     dotfiles_notify = INotify()
 
+    global all_tracked_paths, base_paths
+
+    all_tracked_paths = {}
+    base_paths = {}
+
     for path in data["directories"]:
         path = os.path.expanduser(path)
         base_path = path
@@ -133,8 +138,14 @@ def add_watch(path: str, base_path: str) -> None:
         | flags.MOVED_TO
     )
 
-    global dotfiles_notify
-    wd = dotfiles_notify.add_watch(path, watch_flags)
+    global dotfiles_notify, all_tracked_paths
+
+    try:
+        wd = dotfiles_notify.add_watch(path, watch_flags)
+    except FileNotFoundError:
+        print(f"Could not track {path}, file doesn't exist")
+        return
+
     add_to_base_paths(base_path, wd)
     all_tracked_paths[wd] = path
 
@@ -170,11 +181,21 @@ def check_tracked_files():
     if len(changes) == 0:
         return
 
-    changed_dirs = set()
+    # Paths to delete before applying changed_paths. Used when subfiles are deleted.
+    force_change = set()
+    changed_paths = set()
+    deleted_paths = set()
+
     for change in changes:
         base_path = get_base_path(change.wd)
         print(f"Detected changes in {base_path}")
-        changed_dirs.add(base_path)
+
+        if deleted_path(change):
+            deleted_paths.add(base_path)
+        else:
+            changed_paths.add(base_path)
+            if deleted_subfile(change):
+                force_change.add(base_path)
 
         if VERBOSE_LOGGING:
             print(f"Change {change}")
@@ -182,15 +203,24 @@ def check_tracked_files():
 
         retrack_file_if_necessary(change, base_path)
 
-    for change in changed_dirs:
+    for change in force_change:
+        delete_backed_up_path(change)
+
+    for change in changed_paths:
         if os.path.isdir(change):
             backup_directory(change)
         else:
             backup_file(change)
 
-    commit_message = "Changes to "
-    for change in changed_dirs:
-        commit_message += os.path.basename(change) + " "
+    for deletion in deleted_paths:
+        delete_backed_up_path(deletion)
+
+    commit_message = "\nChanges to:"
+    for change in changed_paths:
+        commit_message += " " + change.replace(HOME, "./home")
+    commit_message += "\nDeleted: "
+    for deletion in deleted_paths:
+        commit_message += " " + deletion.replace(HOME, "./home")
 
     git_commit(commit_message)
 
@@ -203,17 +233,38 @@ def get_base_path(wd) -> str:
     raise ValueError("Invalid argument")
 
 
+def deleted_path(change) -> bool:
+    for flag in flags.from_mask(change.mask):
+        if flag is flags.DELETE_SELF:
+            return True
+
+    return False
+
+
+def deleted_subfile(change) -> bool:
+    for flag in flags.from_mask(change.mask):
+        if flag is flags.DELETE:
+            return True
+
+    return False
+
+
 def log_change_flags(change):
     for flag in flags.from_mask(change.mask):
-        print(next((flag.name for _flag in flags if _flag.value == flag), None))
+        print(next((flag.name for _flag in flags if _flag.value == flag), None))  # type: ignore
 
 
 def retrack_file_if_necessary(change, base_path):
+    # I don't really understand how the ignored flag works, I just know that changes
+    # with it need to be retracked or they won't be tracked anymore
     for flag in flags.from_mask(change.mask):
         if flag is not flags.IGNORED:
             continue
 
         path = all_tracked_paths[change.wd]
+
+        if not os.path.exists(path):
+            return
 
         add_watch(path, base_path)
 
@@ -222,9 +273,10 @@ def backup_directory(dir: str) -> None:
     print(f"Backing up directory {dir}")
 
     backup_dir = dir.replace(HOME, "./home")
+    upper_backup_dir = os.path.join(backup_dir, "..")
 
-    subprocess.run(["mkdir", "-p", backup_dir])
-    subprocess.run(["cp", "-r", dir, backup_dir + "/.."])
+    exec_cmd(f"mkdir -p {backup_dir}")
+    exec_cmd(f"cp -r {dir} {upper_backup_dir}")
 
 
 def backup_file(path: str) -> None:
@@ -232,8 +284,13 @@ def backup_file(path: str) -> None:
 
     backup_dir = os.path.dirname(path.replace(HOME, "./home"))
 
-    subprocess.run(["mkdir", "-p", backup_dir])
-    subprocess.run(["cp", path, backup_dir])
+    exec_cmd(f"mkdir -p {backup_dir}")
+    exec_cmd(f"cp {path} {backup_dir}")
+
+
+def delete_backed_up_path(path: str):
+    path = path.replace(HOME, "./home")
+    exec_cmd(f"rm -rf {path}")
 
 
 def git_commit(commit_message: str | None = None):
@@ -245,27 +302,26 @@ def git_commit(commit_message: str | None = None):
     if commit_message is None:
         commit_message = str(datetime.now())
 
-    if not COMMIT:
-        print(f"Commit with message {commit_message}")
-        return
-
-    subprocess.run(["git", "add", "."])
+    exec_cmd("git add .")
 
     if USE_OPENAI:
         commit_message = commit_message_generation.get_commit_message()
 
-    subprocess.run(["git", "commit", "-m", f"Automated update: {commit_message}"])
+    exec_cmd(f'git commit -m "Automated Backup: {commit_message}"')
 
 
 def git_push():
     global awaiting_push
     awaiting_push = False
 
-    if not COMMIT:
-        print("Git push")
-        return
+    exec_cmd("git push")
 
-    subprocess.run(["git", "push"])
+
+def exec_cmd(cmd: str) -> None:
+    if NO_BACKUP:
+        print(cmd)
+    else:
+        subprocess.run(cmd, shell=True)
 
 
 if __name__ == "__main__":
