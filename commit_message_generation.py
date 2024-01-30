@@ -3,7 +3,10 @@
 import os
 from openai import OpenAI
 
-client = OpenAI(api_key=os.environ.get("OPENAI_KEY"))
+key = os.environ.get("OPENAI_KEY")
+
+if key is not None:
+    client = OpenAI(api_key=os.environ.get("OPENAI_KEY"))
 
 
 def get_commit_message(model="gpt-3.5-turbo") -> str:
