@@ -1,10 +1,8 @@
 #!/bin/bash
 
-chmod +x ./synchronizer_service.py
-
 user_home=$HOME
-script_path=$(realpath -s ./synchronizer_service.py)
-script_directory=$(pwd)
+script_path=$(realpath -s ./service/synchronizer_service.py)
+script_directory=$(pwd)/service
 
 escaped_user_home=$(echo "$user_home" | sed 's/[\/&]/\\&/g')
 escaped_script_path=$(echo "$script_path" | sed 's/[\/&]/\\&/g')

@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Environment="HOME=user_home"
-ExecStart=script_path
+ExecStart=/usr/bin/env python script_path
 WorkingDirectory=script_directory
 Restart=always
 
