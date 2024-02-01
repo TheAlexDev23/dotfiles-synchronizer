@@ -1,5 +1,5 @@
 [tool.pyright]
-include = ["./"]
+include = ["./service/"]
 
 reportMissingImports = true
 reportMissingTypeStubs = false
@@ -8,5 +8,5 @@ pythonVersion = "3.11"
 pythonPlatform = "Linux"
 
 executionEnvironments = [
-  { root = "./", pythonVersion = "3.11", extraPaths = [ "./" ] }
+  { root = "./service/", pythonVersion = "3.11", extraPaths = [ "./service/" ] }
 ]
