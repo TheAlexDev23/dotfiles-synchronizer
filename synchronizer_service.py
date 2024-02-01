@@ -59,16 +59,7 @@ def track_config():
 def backup_initial_files():
     print("Performing initial backup")
 
-    with open(CONFIG, "r") as fp:
-        data = json.load(fp)
-
-    for dir in data["directories"]:
-        dir = os.path.expanduser(dir)
-        backup_directory(dir)
-
-    for path in data["files"]:
-        path = os.path.expanduser(path)
-        backup_file(path)
+    backup_all_files()
 
     git_commit("initial backup")
 
@@ -171,6 +162,17 @@ def check_config_changes():
                 track_config()
 
     parse_config(False)
+    backup_all_files()
+    git_commit("synchronization targets changed")
+
+
+def backup_all_files():
+    global base_paths
+    for path in base_paths:
+        if os.path.isdir(path):
+            backup_directory(path)
+        else:
+            backup_file(path)
 
 
 def check_tracked_files():
