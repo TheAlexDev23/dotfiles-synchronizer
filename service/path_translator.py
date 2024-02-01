@@ -9,4 +9,4 @@ def to_backup_path(path: str) -> str:
     if not path.startswith(constants.HOME):
         raise ArgumentError("Path not located in /home/user are not supported")
 
-    return path.replace(constants.HOME, "./home")
+    return path.replace(constants.HOME, "../home")
