@@ -3,7 +3,7 @@ import os
 RATE = 0.5
 
 VERBOSE_LOGGING = False
-NO_BACKUP = False
+NO_BACKUP = True
 PUSH_RATE = 30
 
 USE_OPENAI = False
